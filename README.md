@@ -167,3 +167,131 @@ At the end, activity_heatmap() is written again with the same logic. That means 
 Overall purpose
 In simple words, this file contains all the analysis functions for the WhatsApp Chat Analyzer. The main app calls these functions to compute statistics, timelines, most active users, word clouds, common words, emoji counts, and heatmap data from the chat DataFrame.
 
+
+preprocess.py
+
+
+This code is the preprocessing part of your WhatsApp Chat Analyzer. Its job is to take the raw exported chat text, separate each message, identify the sender and message content, convert dates into proper datetime format, and create extra columns like year, month, day, hour, and time period for analysis.
+Main purpose
+The function preprocess(data) takes the full WhatsApp chat text as input and converts it into a clean Pandas DataFrame. This is important because analysis functions work better on structured tabular data than on raw text.
+Regex pattern
+pattern = r'\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4},?\s\d{1,2}:\d{2}\s?(?:am|pm|AM|PM)?\s?-\s'
+This regular expression is used to detect WhatsApp timestamps such as 12/5/23, 9:45 pm - or 12-5-2023 9:45 -. It matches date, time, optional AM/PM, and the dash that usually appears before the message text.
+Splitting messages and dates
+messages = re.split(pattern, data)[1:]
+dates = re.findall(pattern, data)
+re.split() breaks the chat text into individual message parts using the timestamp pattern.
+re.findall() extracts all matching date-time strings.
+So after this:
+messages contains the message text parts.
+dates contains the corresponding timestamps.
+if len(messages) == 0:
+    raise ValueError("No valid WhatsApp messages found")
+This checks whether any valid messages were found. If not, it raises an error so the app knows the file format is not matching the expected WhatsApp export style.
+Creating the DataFrame
+df = pd.DataFrame({'user_message': messages, 'message_date': dates})
+This creates a DataFrame with two columns:
+user_message for the raw message text
+message_date for the timestamp text
+df['message_date'] = pd.to_datetime(df['message_date'], errors='coerce')
+df.rename(columns={'message_date': 'date'}, inplace=True)
+pd.to_datetime() converts the date strings into proper datetime values.
+errors='coerce' means invalid date values become missing values instead of crashing the program.
+Then the column is renamed from message_date to date.
+Separating user and message
+users = []
+messages_list = []
+These two empty lists will store:
+sender names
+actual message text
+for message in df['user_message']:
+    entry = re.split(r'([\w\W]+?):\s', message)
+This tries to split each chat line into:
+username
+message text
+The pattern looks for something like Rahul: Hello where the name appears before :.
+   if entry[1:]:
+        users.append(entry[1])
+        messages_list.append(entry[2])
+If the split successfully finds a sender name:
+save the sender in users
+save the message text in messages_list
+
+   else:
+        users.append('group_notification')
+        messages_list.append(entry[0])
+If no sender is found, it is treated as a group notification, like:
+“X joined using this group's invite link”
+“Messages and calls are end-to-end encrypted”
+Adding cleaned columns
+df['user'] = users
+df['message'] = messages_list
+df.drop(columns=['user_message'], inplace=True)
+This adds the cleaned sender and message columns and removes the old combined column.
+So now the DataFrame becomes more useful:
+date
+user
+message
+Date feature extraction
+df['only_date'] = df['date'].dt.date
+df['year'] = df['date'].dt.year
+df['month'] = df['date'].dt.month_name()
+df['month_num'] = df['date'].dt.month
+df['day'] = df['date'].dt.day
+df['day_name'] = df['date'].dt.day_name()
+df['hour'] = df['date'].dt.hour
+df['minute'] = df['date'].dt.minute
+These lines create extra columns from the datetime column so later analysis becomes easier. For example, you can now group messages by year, month, day, weekday, hour, or minute.
+Creating time period
+period = []
+for hour in df[['day_name', 'hour']]['hour']:
+    if hour == 23:
+        period.append(str(hour) + "-" + str('00'))
+    elif hour == 0:
+        period.append(str('00') + "-" + str(hour + 1))
+    else:
+        period.append(str(hour) + "-" + str(hour + 1))
+This creates a time slot for every message based on its hour. Examples:
+0 becomes "00-1"
+9 becomes "9-10"
+23 becomes "23-00"
+This is useful for heatmaps and hourly activity charts.
+df['period'] = period
+This stores those time slots in a new column called period.
+Repeated code
+After that, your code repeats these lines again:
+df['hour'] = df['date'].dt.hour
+df['minute'] = df['date'].dt.minute
+df['day_name'] = df['date'].dt.day_name()
+
+period = []
+for hour in df['hour']:
+    ...
+df['period'] = period
+This repeated block does the same work again, so it is unnecessary duplication. The second block overwrites the same columns with the same values, so you can remove it without changing the final result.
+Return value
+return df
+This returns the final cleaned DataFrame. That DataFrame is then used by your helper functions and Streamlit dashboard.
+Simple flow
+Here is the full process in very simple words:
+Read raw WhatsApp chat text.
+Find date and time patterns using regex.
+Split the text into separate messages.
+Extract sender name and actual message.
+Convert date text into datetime format.
+Create useful columns like month, day, hour, and period.
+Return a clean DataFrame for analysis.
+Function summary
+Function
+Purpose
+Input
+Output
+preprocess(data)
+Converts raw WhatsApp chat text into structured tabular data. 
+Full WhatsApp chat text as a string. 
+A cleaned DataFrame with columns like date, user, message, year, month, day_name, and period. 
+
+Very short viva answer
+You can say: “This function preprocesses raw WhatsApp chat text using regex, extracts timestamps, usernames, and messages, converts them into a DataFrame, and creates additional date-time columns for further analysis.”
+One improvement
+A cleaner version would remove the duplicate hour, minute, day_name, and period block, because those columns are already created earlier. Also, when saving messages, using " ".join(entry[2:]) can be safer than only entry[2] if a split produces multiple text parts.
