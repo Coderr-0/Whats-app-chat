@@ -22,5 +22,148 @@ You can think of the app in this order:
 - Click the button to generate results.
 - View stats, charts, word analysis, and emoji analysis. 
 
-A very simple one-line summary is: this code makes a WhatsApp chat dashboard where a user uploads a chat file and gets visual insights from it. 
+ 
+ 
+helper.py
+
+ 
+Imports
+from urlextract import URLExtract
+from wordcloud import WordCloud
+import pandas as pd
+from collections import Counter
+import emoji
+URLExtract is used to find links inside chat messages.
+WordCloud is used to generate a word cloud from all messages.
+pandas is used for working with DataFrames and grouping data.
+Counter counts repeated items like words or emojis.
+emoji helps detect emoji characters in messages.
+extractor = URLExtract()
+This creates an object that will be used later to extract URLs from each message.
+fetch_stats()
+def fetch_stats(selected_user, df):
+This function calculates the main statistics of the chat for either one selected user or the full chat.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+If the user selects a specific person, the DataFrame is filtered to include only that person’s messages. If "Overall" is selected, the full DataFrame is used.
+   num_messages = df.shape[0]
+This counts the total number of messages by checking how many rows are in the DataFrame.
+   words = []
+    for message in df['message']:
+        words.extend(message.split())
+This loops through every message, splits each message into words, and stores them all in a list. Later, the total word count is found using the list length.
+   num_media_messages = df[df['message'] == '<Media omitted>\n'].shape[0]
+This counts how many messages are media placeholders like images or videos instead of text.
+   links = []
+    for message in df['message']:
+        links.extend(extractor.find_urls(message))
+This checks every message for URLs and stores all detected links in a list.
+   return num_messages, len(words), num_media_messages, len(links)
+This returns four values: total messages, total words, media messages, and links shared.
+monthly_timeline()
+def monthly_timeline(selected_user, df):
+This function creates a month-wise message timeline.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+Again, it filters the DataFrame if a particular user is selected.
+   timeline = df.groupby(['year', 'month_num', 'month']).count()['message'].reset_index()
+This groups the data by year and month, counts the number of messages in each group, and converts the result back into a normal table.
+   time = []
+    for i in range(timeline.shape[0]):
+        time.append(timeline['month'][i] + "-" + str(timeline['year'][i]))
+This creates a new readable label like January-2024 or May-2023 for plotting.
+   timeline['time'] = time
+    return timeline
+The new time column is added and the final timeline DataFrame is returned.
+daily_timeline()
+def daily_timeline(selected_user, df):
+This function creates a day-wise timeline of messages.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+It filters the chat by selected user if needed.
+   daily_timeline = df.groupby('only_date').count()['message'].reset_index()
+It groups messages by date and counts how many messages were sent on each day.
+   return daily_timeline
+It returns the daily timeline table.
+week_activity_map()
+def week_activity_map(selected_user, df):
+This function finds how many messages were sent on each weekday.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+It filters by user if required.
+   return df['day_name'].value_counts()
+It counts how many times each day name like Monday or Tuesday appears.
+month_activity_map()
+def month_activity_map(selected_user, df):
+This function counts messages month-wise.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+It filters for a selected user if needed.
+   return df['month'].value_counts()
+It counts the number of messages in each month.
+activity_heatmap()
+def activity_heatmap(selected_user, df):
+This function creates data for a heatmap showing chat activity across days and time periods.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+It filters the DataFrame when one person is selected.
+   user_heatmap = df.pivot_table(index='day_name', columns='period', values='message', aggfunc='count').fillna(0)
+This creates a pivot table where rows are days, columns are time periods, and cell values show the count of messages. fillna(0) replaces empty cells with 0.
+   return user_heatmap
+It returns the heatmap data.
+most_busy_users()
+def most_busy_users(df):
+This function finds which users send the most messages in the group.
+   x = df['user'].value_counts().head()
+This gets the top 5 most active users by message count.
+   df_percent = round((df['user'].value_counts() / df.shape[0]) * 100, 2).reset_index()
+This calculates what percentage of total messages each user contributed.
+   return x, df_percent
+It returns both the top user counts and the percentage table.
+create_wordcloud()
+def create_wordcloud(selected_user, df):
+This function creates a word cloud from the chat messages.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+It filters data if one user is selected.
+   wc = WordCloud(width=500, height=500, min_font_size=10, background_color='white')
+This creates a WordCloud object and sets its size, font size, and background color.
+   df_wc = wc.generate(df['message'].str.cat(sep=" "))
+This joins all messages into one large text string and generates the word cloud from it.
+   return df_wc
+It returns the word cloud object so it can be displayed in the app.
+most_common_words()
+def most_common_words(selected_user, df):
+This function finds the most frequently used words in the chat.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+It filters messages for the selected user if needed.
+   words = []
+This creates an empty list to store all words.
+   for message in df['message']:
+        words.extend(message.lower().split())
+This converts each message to lowercase, splits it into words, and adds those words to the list.
+   most_common_df = pd.DataFrame(Counter(words).most_common(20))
+Counter counts word frequency, and most_common(20) returns the top 20 words. Then it converts the result into a DataFrame.
+   return most_common_df
+It returns the table of most common words.
+emoji_helper()
+def emoji_helper(selected_user, df):
+This function finds and counts emojis used in the chat.
+   if selected_user != 'Overall':
+        df = df[df['user'] == selected_user]
+It filters the DataFrame for a specific user if selected.
+   emojis = []
+This creates an empty list to store emojis.
+   for message in df['message']:
+        emojis.extend([c for c in message if c in emoji.EMOJI_DATA])
+This checks each character in each message and keeps only those characters that are valid emojis.
+   emoji_df = pd.DataFrame(Counter(emojis).most_common(len(Counter(emojis))))
+This counts emoji frequency and converts the results into a DataFrame.
+   return emoji_df
+It returns the emoji count table.
+Duplicate function
+At the end, activity_heatmap() is written again with the same logic. That means the second version simply overwrites the first one, so it is unnecessary duplication and can be removed.
+Overall purpose
+In simple words, this file contains all the analysis functions for the WhatsApp Chat Analyzer. The main app calls these functions to compute statistics, timelines, most active users, word clouds, common words, emoji counts, and heatmap data from the chat DataFrame.
 
