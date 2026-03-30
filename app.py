@@ -119,6 +119,21 @@ if uploaded_file is not None:
 
         st.title('Most commmon words')
         st.pyplot(fig)
+        # Sentiment Analysis
+        st.title("Sentiment Analysis")
+
+        df_sent = helper.sentiment_analysis(selected_user, df)
+
+        positive = df_sent[df_sent['sentiment'] > 0].shape[0]
+        negative = df_sent[df_sent['sentiment'] < 0].shape[0]
+        neutral = df_sent[df_sent['sentiment'] == 0].shape[0]
+
+        fig, ax = plt.subplots()
+        ax.pie([positive, negative, neutral],
+               labels=['Positive', 'Negative', 'Neutral'],
+               autopct="%0.2f")
+
+        st.pyplot(fig)
 
         # emoji analysis
         emoji_df = helper.emoji_helper(selected_user,df)
@@ -130,5 +145,28 @@ if uploaded_file is not None:
             st.dataframe(emoji_df)
         with col2:
             fig,ax = plt.subplots()
+            ax.pie(emoji_df[1].head(),labels=emoji_df[0].head(),autopct="%0.2f")
+            st.pyplot(fig)
+            df = helper.prepare_features(df)
+            df_sent = helper.sentiment_analysis(selected_user, df)
+
+            cluster_df = helper.user_clustering(df)
+            st.dataframe(cluster_df)
+            model, cv = helper.train_message_classifier(df)
+
+            sample = st.text_input("Enter message to classify:")
+
+            if sample:
+                vec = cv.transform([sample])
+                pred = model.predict(vec)
+                st.write("Prediction:", pred[0])
+                st.title("Message Activity Prediction")
+
+                model, y = helper.activity_prediction(df)
+
+                if model is not None:
+                    st.write("Activity Prediction Model Trained")
+                else:
+                    st.write("Not enough data for prediction")
             ax.pie(emoji_df[1].head(),labels=emoji_df[0].head(),autopct="%0.2f")
             st.pyplot(fig)
